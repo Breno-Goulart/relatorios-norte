@@ -22,8 +22,35 @@ import {
   Plus
 } from 'lucide-react';
 
-import Button from '../components/Button';
-import Input from '../components/Input';
+// Componentes internos para garantir o funcionamento em arquivo único
+const Button = ({ children, variant = 'primary', className = '', ...props }) => {
+  const baseStyles = "px-4 py-2 rounded-xl font-bold transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center justify-center gap-2";
+  const variants = {
+    primary: "bg-blue-600 text-white hover:bg-blue-700 shadow-sm",
+    secondary: "bg-slate-100 text-slate-600 hover:bg-slate-200",
+    danger: "bg-red-600 text-white hover:bg-red-700",
+    success: "bg-emerald-600 text-white hover:bg-emerald-700"
+  };
+  
+  return (
+    <button 
+      className={`${baseStyles} ${variants[variant] || variants.primary} ${className}`}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+};
+
+const Input = ({ label, className = '', ...props }) => (
+  <div className="space-y-1.5 w-full">
+    {label && <label className="text-xs font-bold text-slate-500 uppercase ml-1">{label}</label>}
+    <input 
+      className={`w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 transition-all ${className}`}
+      {...props}
+    />
+  </div>
+);
 
 const StatCard = ({ title, value, icon: Icon, color, trend, delay }) => (
   <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all duration-300 ease-out animate-in fade-in slide-in-from-bottom-4 fill-mode-backwards will-change-transform" style={{ animationDelay: delay || '0ms' }}>
@@ -53,21 +80,29 @@ const ActionCard = ({ title, description, icon: Icon, onClick, color }) => (
   </button>
 );
 
-export default function AdminDashboard({ 
+export default function App(props) {
+  // Renomeado para App para ser o default export padrão do ambiente
+  return <AdminDashboard {...props} />;
+}
+
+function AdminDashboard({ 
   reports,
-  fechamentos,
+  fechamentos = {},
   onLogout, 
   monthlyImage, 
   setMonthlyImage, 
-  meses, 
-  anosDisponiveis,
-  opcoesEstudos,
+  meses = [
+    "JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", 
+    "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"
+  ], 
+  anosDisponiveis = [new Date().getFullYear().toString()],
+  opcoesEstudos = [0, 1, 2, 3, 4, 5],
   onUpdateReport,
   onDeleteReport,
   onAddReport,
   onSaveConfig,
   onToggleFechamento,
-  ImageLoader
+  ImageLoader = ({ src, className }) => <img src={src || 'https://via.placeholder.com/400x300?text=Sem+Imagem'} className={className} alt="Capa" />
 }) {
   const relatorios = reports || [];
 
@@ -137,7 +172,7 @@ export default function AdminDashboard({
 
   const confirmDelete = async () => {
     if (reportToDelete) {
-      await onDeleteReport(reportToDelete.id);
+      if (onDeleteReport) await onDeleteReport(reportToDelete.id);
       setIsConfirmDeleteOpen(false);
       setReportToDelete(null);
     }
@@ -167,8 +202,8 @@ export default function AdminDashboard({
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
               <div className="flex items-center gap-3">
-                <div className="w-20 h-20 flex items-center justify-center overflow-hidden">
-                  <img src="/logo.png" alt="Logo" className="w-full h-full object-contain drop-shadow-sm" />
+                <div className="w-12 h-12 flex items-center justify-center overflow-hidden">
+                  <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">CN</div>
                 </div>
                 <div>
                   <h1 className="text-lg font-bold text-slate-900 leading-none">Painel Administrativo</h1>
@@ -343,7 +378,7 @@ export default function AdminDashboard({
             <div className="flex flex-col sm:flex-row gap-3 mt-4 w-full">
               <Button 
                 variant="primary" 
-                className="flex items-center justify-center gap-2 w-full min-h-[48px] rounded-xl shadow-lg shadow-blue-100 active:scale-[0.98] transition-all duration-200 ease-out will-change-transform"
+                className="flex items-center justify-center gap-2 w-full min-h-[48px] rounded-xl shadow-lg shadow-blue-100"
                 onClick={() => {
                   setSelectedReport(null);
                   setIsReportModalOpen(true);
@@ -353,16 +388,16 @@ export default function AdminDashboard({
                 Novo Registro
               </Button>
               <Button 
-                variant="primary" 
-                className="flex items-center justify-center gap-2 w-full min-h-[48px] rounded-xl !bg-emerald-600 hover:!bg-emerald-700 !shadow-emerald-200 border-none active:scale-[0.98] transition-all duration-200 ease-out will-change-transform"
+                variant="success" 
+                className="flex items-center justify-center gap-2 w-full min-h-[48px] rounded-xl"
                 onClick={handleExportData}
               >
                 <Download size={18} />
                 Exportar Excel
               </Button>
               <Button 
-                variant="primary" 
-                className="flex items-center justify-center gap-2 w-full min-h-[48px] rounded-xl !bg-red-600 hover:!bg-red-700 !shadow-red-200 border-none active:scale-[0.98] transition-all duration-200 ease-out will-change-transform"
+                variant="danger" 
+                className="flex items-center justify-center gap-2 w-full min-h-[48px] rounded-xl"
                 onClick={() => window.print()}
               >
                 <Download size={18} />
@@ -383,7 +418,7 @@ export default function AdminDashboard({
             </div>
             {!filterMonth.includes('Todos') && filterMonth.length === 1 && !filterYear.includes('Todos') && filterYear.length === 1 && (
               <button 
-                onClick={() => onToggleFechamento(filterMonth[0], filterYear[0], fechamentos[`${filterMonth[0]}-${filterYear[0]}`])}
+                onClick={() => onToggleFechamento && onToggleFechamento(filterMonth[0], filterYear[0], fechamentos[`${filterMonth[0]}-${filterYear[0]}`])}
                 className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
                   fechamentos[`${filterMonth[0]}-${filterYear[0]}`] ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-green-50 text-green-600 hover:bg-green-100'
                 }`}
@@ -423,12 +458,14 @@ export default function AdminDashboard({
                               )}
                             </div>
                           </div>
+                          <span className="sm:hidden text-xs text-slate-400">Publicador</span>
                         </td>
                         <td className="px-0 sm:px-6 py-2 sm:py-4 flex justify-between sm:table-cell items-center">
                           <div className="flex flex-col">
                             <span className="text-sm text-slate-700 font-medium">{report.mes}</span>
                             <span className="text-xs text-slate-400">{report.ano}</span>
                           </div>
+                          <span className="sm:hidden text-xs text-slate-400">Período</span>
                         </td>
                         <td className="px-0 sm:px-6 py-2 sm:py-4 flex justify-between sm:table-cell items-center">
                           <span className={`text-xs font-medium px-2 py-1 rounded-lg ${
@@ -436,17 +473,21 @@ export default function AdminDashboard({
                           }`}>
                             {report.tipo}
                           </span>
+                          <span className="sm:hidden text-xs text-slate-400">Tipo</span>
                         </td>
                         <td className="px-0 sm:px-6 py-2 sm:py-4 flex justify-between sm:table-cell items-center sm:text-center">
                           <span className="text-sm font-bold text-slate-700">{report.horas || '--'}</span>
+                          <span className="sm:hidden text-xs text-slate-400">Horas</span>
                         </td>
                         <td className="px-0 sm:px-6 py-2 sm:py-4 flex justify-between sm:table-cell items-center sm:text-center">
                           <span className="text-sm font-bold text-slate-700">{report.estudos || '0'}</span>
+                          <span className="sm:hidden text-xs text-slate-400">Estudos</span>
                         </td>
                         <td className="px-0 sm:px-6 py-2 sm:py-4 flex justify-between sm:table-cell items-center sm:text-center">
                           <span className="text-xs text-slate-500 font-medium whitespace-nowrap">
                             {report.dataEnvio?.seconds ? new Date(report.dataEnvio.seconds * 1000).toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '--'}
                           </span>
+                          <span className="sm:hidden text-xs text-slate-400">Envio</span>
                         </td>
                         <td className="px-0 sm:px-6 py-2 sm:py-4 flex justify-between sm:table-cell items-center sm:text-right">
                           <div className="flex justify-end gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
@@ -463,6 +504,7 @@ export default function AdminDashboard({
                               <Trash2 size={16} />
                             </button>
                           </div>
+                          <span className="sm:hidden text-xs text-slate-400">Ações</span>
                         </td>
                       </tr>
                     ))
@@ -574,8 +616,10 @@ function ReportModal({ report, onClose, onSave, meses, anos, opcoesEstudos }) {
       nome_busca: nomeBusca
     };
 
-    const success = await onSave(dadosFinal);
-    if (success !== false) onClose();
+    if (onSave) {
+      const success = await onSave(dadosFinal);
+      if (success !== false) onClose();
+    }
     setLoading(false);
   };
 
@@ -716,7 +760,7 @@ function ReportModal({ report, onClose, onSave, meses, anos, opcoesEstudos }) {
   );
 }
 
-function ConfigModal({ onClose, monthlyImage, onSaveImage, fechamentos, onToggleFechamento, meses, anoAtual, ImageLoader }) {
+function ConfigModal({ onClose, monthlyImage, onSaveImage, ImageLoader }) {
   const [imgUrl, setImgUrl] = useState(monthlyImage);
   const [fileToUpload, setFileToUpload] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -734,7 +778,7 @@ function ConfigModal({ onClose, monthlyImage, onSaveImage, fechamentos, onToggle
 
   const handleSaveImg = async () => {
     setSaving(true);
-    await onSaveImage(fileToUpload || imgUrl);
+    if (onSaveImage) await onSaveImage(fileToUpload || imgUrl);
     setFileToUpload(null);
     setSaving(false);
   };
@@ -766,7 +810,7 @@ function ConfigModal({ onClose, monthlyImage, onSaveImage, fechamentos, onToggle
                 </Button>
               </div>
               <div className="w-full sm:w-48 h-32 rounded-xl overflow-hidden border border-slate-100 bg-slate-50">
-                <ImageLoader src={imgUrl} className="w-full h-full" />
+                <ImageLoader src={imgUrl} className="w-full h-full object-cover" />
               </div>
             </div>
           </section>
