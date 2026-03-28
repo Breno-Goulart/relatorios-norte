@@ -27,7 +27,7 @@ import {
 } from 'firebase/auth';
 
 import ImageLoader from './components/ImageLoader';
-import { formatarNome, formatHoras } from './utils/formatters';
+import { formatHoras } from './utils/formatters';
 
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const FormularioPublicador = lazy(() => import('./pages/FormularioPublicador'));
@@ -54,13 +54,11 @@ export default function App() {
   useEffect(() => {
     if (monthlyImage && typeof monthlyImage === 'string' && monthlyImage.startsWith('http')) {
       localStorage.setItem('@Capa_App', monthlyImage);
-      window.__ramCacheImg = new Image();
-      window.__ramCacheImg.src = monthlyImage;
     }
   }, [monthlyImage]);
   
   const currentYear = new Date().getFullYear().toString();
-  const currentMonth = new Date().toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
+  const currentMonth = meses[new Date().getMonth()];
 
   const [formData, setFormData] = useState({
     mes: currentMonth,
@@ -78,7 +76,7 @@ export default function App() {
     const unsub = onSnapshot(collection(db, 'publicadores'), (snap) => {
       setPublicadoresList(snap.docs.map(doc => doc.data().nome).filter(Boolean));
     }, (error) => {
-      // Silenciado intencionalmente: permissão negada para usuários não logados lerem a base de publicadores diretamente
+      console.warn("Aviso: Autocomplete inativo. É necessário alterar as regras do Firestore para permitir 'read' público na coleção 'publicadores'.");
     });
     return () => unsub();
   }, []);
@@ -200,21 +198,6 @@ export default function App() {
       };
       
       await addDoc(collection(db, 'relatorios'), newReport);
-      
-      try {
-        const pubQuery = query(collection(db, 'publicadores'), where('nome', '==', nomeCorrigido));
-        const pubSnap = await getDocs(pubQuery);
-        if (pubSnap.empty) {
-          await addDoc(collection(db, 'publicadores'), {
-            nome: nomeCorrigido,
-            nome_busca: nomeBusca,
-            tipo_padrao: newReport.tipo,
-            dataCriacao: serverTimestamp()
-          });
-        }
-      } catch (error) {
-        // Silenciado intencionalmente: Usuários públicos não têm permissão para alterar a lista de publicadores. Isso é normal e esperado.
-      }
 
       setIsSubmitted(true);
       
