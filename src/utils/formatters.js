@@ -11,21 +11,10 @@ const dateFormatter = new Intl.DateTimeFormat('pt-BR', {
 export const formatHoras = (value) => {
   if (!value) return '';
   const strValue = String(value);
-  if (strValue.includes(':')) {
-    const [h, m] = strValue.split(':');
-    const cleanH = h.replace(/\D/g, '');
-    const cleanM = m.replace(/\D/g, '');
-    if (cleanM.length > 2) {
-      const combined = cleanH + cleanM;
-      return `${combined.slice(0, -2)}:${combined.slice(-2)}`;
-    }
-    return cleanM ? `${cleanH}:${cleanM}` : `${cleanH}:`;
-  }
-  const cleanValue = strValue.replace(/\D/g, '');
-  if (cleanValue.length > 2) {
-    return `${cleanValue.slice(0, -2)}:${cleanValue.slice(-2)}`;
-  }
-  return cleanValue;
+  const [h = '0', m = '00'] = strValue.split(':');
+  const cleanH = h.replace(/\D/g, '') || '0';
+  const cleanM = m.replace(/\D/g, '').substring(0, 2).padStart(2, '0');
+  return `${cleanH}:${cleanM}`;
 };
 
 // Auto-correção Inteligente de Nome (Trim + Remove espaços duplos + MAIÚSCULAS + Normalização)
@@ -45,12 +34,19 @@ export const formatarDataEnvio = (report) => {
     try {
       if (typeof report.dataEnvio === 'string') {
         dataStr = report.dataEnvio;
-      } else if (report.dataEnvio instanceof Date) {
-        dataStr = dateFormatter.format(report.dataEnvio);
-      } else if (report.dataEnvio.seconds) {
-        dataStr = dateFormatter.format(new Date(report.dataEnvio.seconds * 1000));
-      } else if (typeof report.dataEnvio.toDate === 'function') {
-        dataStr = dateFormatter.format(report.dataEnvio.toDate());
+      } else {
+        let dateObj = null;
+        if (report.dataEnvio instanceof Date) {
+          dateObj = report.dataEnvio;
+        } else if (report.dataEnvio.seconds) {
+          dateObj = new Date(report.dataEnvio.seconds * 1000);
+        } else if (typeof report.dataEnvio.toDate === 'function') {
+          dateObj = report.dataEnvio.toDate();
+        }
+        
+        if (dateObj && !isNaN(dateObj.getTime())) {
+          dataStr = dateFormatter.format(dateObj);
+        }
       }
     } catch (e) {
       console.error("Erro na formatação de data:", e);
