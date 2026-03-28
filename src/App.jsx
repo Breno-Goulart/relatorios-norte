@@ -171,8 +171,10 @@ export default function App() {
       return;
     }
 
-    const nomeFormatado = formatarNome(dataToSubmit.nome);
-    if (!nomeFormatado) {
+    const nomeCorrigido = dataToSubmit.nome.trim().replace(/\s+/g, ' ').toUpperCase();
+    const nomeBusca = nomeCorrigido.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+    if (!nomeCorrigido) {
       alert("Por favor, insira um nome válido.");
       return;
     }
@@ -180,7 +182,7 @@ export default function App() {
     try {
       const q = query(
         collection(db, 'relatorios'),
-        where('nome', '==', nomeFormatado),
+        where('nome', '==', nomeCorrigido),
         where('mes', '==', dataToSubmit.mes),
         where('ano', '==', dataToSubmit.ano)
       );
@@ -193,7 +195,8 @@ export default function App() {
 
       const newReport = {
         ...dataToSubmit,
-        nome: nomeFormatado, 
+        nome: nomeCorrigido, 
+        nome_busca: nomeBusca,
         dataEnvio: serverTimestamp(),
         tipo: dataToSubmit.participou === 'NÃO' ? 'Publicador(a)' : dataToSubmit.tipo,
         estudos: dataToSubmit.participou === 'NÃO' ? '0' : (dataToSubmit.estudos || '0'),
@@ -201,6 +204,18 @@ export default function App() {
       };
       
       await addDoc(collection(db, 'relatorios'), newReport);
+      
+      const pubQuery = query(collection(db, 'publicadores'), where('nome', '==', nomeCorrigido));
+      const pubSnap = await getDocs(pubQuery);
+      if (pubSnap.empty) {
+        await addDoc(collection(db, 'publicadores'), {
+          nome: nomeCorrigido,
+          nome_busca: nomeBusca,
+          tipo_padrao: newReport.tipo,
+          dataCriacao: serverTimestamp()
+        });
+      }
+
       setIsSubmitted(true);
       
       setTimeout(() => {
@@ -239,7 +254,7 @@ export default function App() {
     try {
       const reportParaSalvar = {
         ...updatedReport,
-        nome: formatarNome(updatedReport.nome),
+        nome: updatedReport.nome.trim().replace(/\s+/g, ' ').toUpperCase(),
         tipo: updatedReport.participou === 'NÃO' ? 'Publicador(a)' : updatedReport.tipo,
         estudos: updatedReport.participou === 'NÃO' ? '0' : (updatedReport.estudos || '0'),
         horas: (updatedReport.participou === 'SIM' && updatedReport.tipo?.includes('Pioneiro')) ? (updatedReport.horas || '0') : null
@@ -263,10 +278,12 @@ export default function App() {
 
   const addReportAdmin = useCallback(async (reportData) => {
     try {
-      const nomeLimpo = formatarNome(reportData.nome);
+      const nomeCorrigido = reportData.nome.trim().replace(/\s+/g, ' ').toUpperCase();
+      const nomeBusca = nomeCorrigido.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
       const q = query(
         collection(db, 'relatorios'),
-        where('nome', '==', nomeLimpo),
+        where('nome', '==', nomeCorrigido),
         where('mes', '==', reportData.mes),
         where('ano', '==', reportData.ano)
       );
@@ -279,7 +296,8 @@ export default function App() {
 
       const newReport = {
         ...reportData,
-        nome: nomeLimpo,
+        nome: nomeCorrigido,
+        nome_busca: nomeBusca,
         dataEnvio: serverTimestamp(),
         enviadoPorAdmin: true,
         tipo: reportData.participou === 'NÃO' ? 'Publicador(a)' : reportData.tipo,
@@ -287,6 +305,18 @@ export default function App() {
         horas: (reportData.participou === 'SIM' && reportData.tipo?.includes('Pioneiro')) ? (reportData.horas || '0') : null
       };
       await addDoc(collection(db, 'relatorios'), newReport);
+
+      const pubQuery = query(collection(db, 'publicadores'), where('nome', '==', nomeCorrigido));
+      const pubSnap = await getDocs(pubQuery);
+      if (pubSnap.empty) {
+        await addDoc(collection(db, 'publicadores'), {
+          nome: nomeCorrigido,
+          nome_busca: nomeBusca,
+          tipo_padrao: newReport.tipo,
+          dataCriacao: serverTimestamp()
+        });
+      }
+
       return true;
     } catch (error) {
       console.error("Erro ao adicionar registro: ", error);

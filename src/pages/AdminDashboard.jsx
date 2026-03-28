@@ -117,6 +117,7 @@ function AdminDashboard({
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
+  const [isConfirmCloseMonthOpen, setIsConfirmCloseMonthOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
   const [reportToDelete, setReportToDelete] = useState(null);
 
@@ -286,6 +287,44 @@ function AdminDashboard({
             />
           </div>
 
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 col-span-1 flex flex-col items-center justify-center">
+              <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 w-full text-left">Participação Ativa</h3>
+              <div className="relative w-32 h-32 flex items-center justify-center rounded-full" style={{ background: `conic-gradient(#10b981 ${totalReports > 0 ? (totalParticipations / totalReports) * 100 : 0}%, #f1f5f9 0)`}}>
+                <div className="absolute w-24 h-24 bg-white rounded-full flex flex-col items-center justify-center">
+                  <span className="text-xl font-bold text-slate-800">{totalReports > 0 ? Math.round((totalParticipations / totalReports) * 100) : 0}%</span>
+                  <span className="text-[10px] text-slate-400">Ativos</span>
+                </div>
+              </div>
+              <div className="flex w-full justify-between mt-6 text-sm">
+                <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-emerald-500"></span> Participou ({totalParticipations})</div>
+                <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-slate-100 border border-slate-200"></span> Faltou ({totalReports - totalParticipations})</div>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 col-span-1 lg:col-span-2">
+              <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Histórico de Envios</h3>
+              <div className="h-40 flex items-end gap-2 w-full pt-4">
+                {meses.map(mes => {
+                  const count = relatorios.filter(r => r.mes === mes && r.ano === filterYear[0]).length;
+                  const maxCount = Math.max(...meses.map(m => relatorios.filter(r => r.mes === m && r.ano === filterYear[0]).length), 1);
+                  const height = `${(count / maxCount) * 100}%`;
+                  return (
+                    <div key={mes} className="flex-1 flex flex-col items-center gap-2 group relative cursor-pointer" onClick={() => { setFilterMonth([mes]); setFilterYear([filterYear[0]]); }}>
+                      <div className="w-full bg-blue-100 rounded-t-md relative flex items-end justify-center hover:bg-blue-200 transition-colors" style={{ height }}>
+                        <div className="absolute -top-8 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                          {count} relatórios
+                        </div>
+                        <div className="w-full bg-blue-500 rounded-t-md transition-all" style={{ height: count > 0 ? '100%' : '0%' }}></div>
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase truncate w-full text-center" title={mes}>{mes.substring(0,3)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
           <div className="flex flex-col w-full mb-8">
             <div className="w-full">
               <div className="relative">
@@ -375,10 +414,23 @@ function AdminDashboard({
               ))}
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3 mt-4 w-full">
+            <div className="hidden sm:flex flex-row gap-3 mt-4 w-full items-center justify-end">
+              <div className="relative group outline-none" tabIndex={0}>
+                <button className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl font-bold transition-all min-h-[48px]">
+                  <MoreHorizontal size={18} /> Opções
+                </button>
+                <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-xl p-2 z-50 flex flex-col gap-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible transition-all">
+                  <button onClick={handleExportData} className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg text-left">
+                    <Download size={16} className="text-emerald-600" /> Exportar Excel
+                  </button>
+                  <button onClick={() => window.print()} className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg text-left">
+                    <Download size={16} className="text-red-600" /> Exportar PDF
+                  </button>
+                </div>
+              </div>
               <Button 
                 variant="primary" 
-                className="flex items-center justify-center gap-2 w-full min-h-[48px] rounded-xl shadow-lg shadow-blue-100"
+                className="flex items-center justify-center gap-2 min-h-[48px] rounded-xl shadow-lg shadow-blue-100"
                 onClick={() => {
                   setSelectedReport(null);
                   setIsReportModalOpen(true);
@@ -387,22 +439,26 @@ function AdminDashboard({
                 <Plus size={18} />
                 Novo Registro
               </Button>
-              <Button 
-                variant="success" 
-                className="flex items-center justify-center gap-2 w-full min-h-[48px] rounded-xl"
-                onClick={handleExportData}
+            </div>
+            
+            <div className="sm:hidden fixed bottom-6 right-6 z-40 flex flex-col-reverse items-end gap-3 group">
+              <button 
+                onClick={() => {
+                  setSelectedReport(null);
+                  setIsReportModalOpen(true);
+                }}
+                className="w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg shadow-blue-200 flex items-center justify-center hover:bg-blue-700 transition-transform active:scale-95"
               >
-                <Download size={18} />
-                Exportar Excel
-              </Button>
-              <Button 
-                variant="danger" 
-                className="flex items-center justify-center gap-2 w-full min-h-[48px] rounded-xl"
-                onClick={() => window.print()}
-              >
-                <Download size={18} />
-                Exportar PDF
-              </Button>
+                <Plus size={24} />
+              </button>
+              <div className="flex flex-col gap-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all translate-y-4 group-hover:translate-y-0">
+                <button onClick={() => window.print()} className="w-12 h-12 bg-red-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-red-700 active:scale-95">
+                  <Download size={20} />
+                </button>
+                <button onClick={handleExportData} className="w-12 h-12 bg-emerald-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-emerald-700 active:scale-95">
+                  <Download size={20} />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -418,10 +474,14 @@ function AdminDashboard({
             </div>
             {!filterMonth.includes('Todos') && filterMonth.length === 1 && !filterYear.includes('Todos') && filterYear.length === 1 && (
               <button 
-                onClick={() => onToggleFechamento && onToggleFechamento(filterMonth[0], filterYear[0], fechamentos[`${filterMonth[0]}-${filterYear[0]}`])}
-                className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                  fechamentos[`${filterMonth[0]}-${filterYear[0]}`] ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-green-50 text-green-600 hover:bg-green-100'
-                }`}
+                onClick={() => {
+                  if (!fechamentos[`${filterMonth[0]}-${filterYear[0]}`]) {
+                    setIsConfirmCloseMonthOpen(true);
+                  } else {
+                    onToggleFechamento && onToggleFechamento(filterMonth[0], filterYear[0], true);
+                  }
+                }}
+                className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${ fechamentos[`${filterMonth[0]}-${filterYear[0]}`] ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-green-50 text-green-600 hover:bg-green-100' }`}
               >
                 {fechamentos[`${filterMonth[0]}-${filterYear[0]}`] ? '🔒 MÊS FECHADO (Clique p/ Abrir)' : '🔓 MÊS ABERTO (Clique p/ Fechar)'}
               </button>
@@ -552,6 +612,7 @@ function AdminDashboard({
       {isReportModalOpen && (
         <ReportModal 
           report={selectedReport}
+          reports={reports}
           onClose={() => setIsReportModalOpen(false)}
           onSave={selectedReport ? onUpdateReport : onAddReport}
           meses={meses}
@@ -581,11 +642,23 @@ function AdminDashboard({
           onCancel={() => setIsConfirmDeleteOpen(false)}
         />
       )}
+
+      {isConfirmCloseMonthOpen && (
+        <ConfirmModal 
+          title="Confirmar Fechamento"
+          message="Tem certeza que deseja fechar este mês? Novos relatórios não poderão ser enviados até que seja reaberto."
+          onConfirm={() => {
+            onToggleFechamento && onToggleFechamento(filterMonth[0], filterYear[0], false);
+            setIsConfirmCloseMonthOpen(false);
+          }}
+          onCancel={() => setIsConfirmCloseMonthOpen(false)}
+        />
+      )}
     </>
   );
 }
 
-function ReportModal({ report, onClose, onSave, meses, anos, opcoesEstudos }) {
+function ReportModal({ report, reports, onClose, onSave, meses, anos, opcoesEstudos }) {
   const [formData, setFormData] = useState(report || {
     nome: '',
     mes: meses[new Date().getMonth()] || meses[0],
@@ -596,6 +669,11 @@ function ReportModal({ report, onClose, onSave, meses, anos, opcoesEstudos }) {
     horas: ''
   });
   const [loading, setLoading] = useState(false);
+
+  const nomesUnicos = useMemo(() => {
+    if (!reports) return [];
+    return [...new Set(reports.map(r => r.nome).filter(Boolean))].sort();
+  }, [reports]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -632,13 +710,19 @@ function ReportModal({ report, onClose, onSave, meses, anos, opcoesEstudos }) {
         </div>
         
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <Input 
-            label="Nome do Irmão(ã)" 
-            value={formData.nome}
-            onChange={(e) => setFormData({...formData, nome: e.target.value.toUpperCase()})}
-            placeholder="Ex: JOÃO SILVA"
-            required
-          />
+          <div className="relative w-full">
+            <Input 
+              label="Nome do Irmão(ã)" 
+              value={formData.nome}
+              onChange={(e) => setFormData({...formData, nome: e.target.value.toUpperCase()})}
+              placeholder="Ex: JOÃO SILVA"
+              list="publicadores-list"
+              required
+            />
+            <datalist id="publicadores-list">
+              {nomesUnicos.map(nome => <option key={nome} value={nome} />)}
+            </datalist>
+          </div>
           
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-500 uppercase ml-1">Participou no Ministério?</label>
@@ -831,7 +915,7 @@ function ConfirmModal({ title, message, onConfirm, onCancel }) {
         <p className="text-sm text-slate-500 mb-6">{message}</p>
         <div className="flex gap-3">
           <button onClick={onCancel} className="flex-1 px-4 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50">Cancelar</button>
-          <button onClick={onConfirm} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-xl text-sm font-bold hover:bg-red-700 transition-colors">Excluir</button>
+          <button onClick={onConfirm} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-xl text-sm font-bold hover:bg-red-700 transition-colors">Confirmar</button>
         </div>
       </div>
     </div>
