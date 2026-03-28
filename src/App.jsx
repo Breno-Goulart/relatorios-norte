@@ -1,0 +1,420 @@
+import React, { useState, useMemo, useEffect, Suspense, lazy, useCallback } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+
+// ==========================================
+// CONFIGURAÇÃO DO FIREBASE (PRODUÇÃO)
+// ==========================================
+import { auth, db } from './config/firebase'; 
+import { 
+  collection, 
+  addDoc, 
+  onSnapshot, 
+  updateDoc, 
+  doc, 
+  deleteDoc, 
+  query, 
+  orderBy, 
+  setDoc, 
+  getDocs, 
+  where, 
+  serverTimestamp 
+} from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+
+import { 
+  signInWithEmailAndPassword, 
+  onAuthStateChanged, 
+  signOut, 
+  setPersistence, 
+  inMemoryPersistence 
+} from 'firebase/auth';
+
+// ==========================================
+// UTILITÁRIOS & COMPONENTES
+// ==========================================
+import ImageLoader from './components/ImageLoader';
+import { formatarNome, formatHoras } from './utils/formatters';
+
+// Code-splitting ao nível de rota
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const FormularioPublicador = lazy(() => import('./pages/FormularioPublicador'));
+
+const capaPadrao = "https://images.unsplash.com/photo-1579546678183-a84849910e97?q=80&w=1000&auto=format&fit=crop";
+
+// Definições constantes fora do componente para evitar re-renderizações desnecessárias
+const meses = ['JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'];
+const opcoesEstudos = Array.from({ length: 51 }, (_, i) => i);
+
+/**
+ * Componente Principal App
+ * Gerencia o estado global da aplicação e o roteamento.
+ */
+export default function App() {
+  const [view, setView] = useState('form'); 
+  const [reports, setReports] = useState([]);
+  const [fechamentos, setFechamentos] = useState({});
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminError, setAdminError] = useState('');
+  
+  const [monthlyImage, setMonthlyImage] = useState(localStorage.getItem('@Capa_App') || '');
+
+  useEffect(() => {
+    if (monthlyImage && typeof monthlyImage === 'string' && monthlyImage.startsWith('http')) {
+      localStorage.setItem('@Capa_App', monthlyImage);
+      // Previne Garbage Collection prematuro mantendo referência em memória global
+      window.__ramCacheImg = new Image();
+      window.__ramCacheImg.src = monthlyImage;
+    }
+  }, [monthlyImage]);
+  
+  const currentYear = new Date().getFullYear().toString();
+  const currentMonth = new Date().toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
+
+  const [formData, setFormData] = useState({
+    mes: currentMonth,
+    ano: currentYear,
+    nome: '',
+    participou: 'SIM',
+    tipo: 'Publicador(a)',
+    estudos: '0',
+    horas: ''
+  });
+  const [isSubmitted, setIsSubmitted] = useState(false);
+
+  // Sync de imagem de capa do banco
+  useEffect(() => {
+    if (!db) return;
+    const configRef = doc(db, 'configuracoes', 'gerais');
+    const unsub = onSnapshot(configRef, (docSnap) => {
+      let coverImage = capaPadrao; 
+      if (docSnap.exists() && docSnap.data().imagemCapa) {
+        const linkDoBanco = docSnap.data().imagemCapa;
+        if (typeof linkDoBanco === 'string' && linkDoBanco.startsWith('http')) {
+           coverImage = linkDoBanco;
+        }
+      }
+      setMonthlyImage(prev => prev !== coverImage ? coverImage : prev);
+    });
+    return () => unsub();
+  }, []);
+
+  // Monitor de Autenticação
+  useEffect(() => {
+    if (!auth) {
+      setAuthLoading(false);
+      return;
+    }
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Sync de Relatórios (Real-time)
+  useEffect(() => {
+    if (!currentUser || !db) return;
+    const q = query(collection(db, 'relatorios'), orderBy('dataEnvio', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setReports(data);
+    }, (error) => {
+      console.error("Erro ao sincronizar dados: ", error);
+    });
+    return () => unsubscribe();
+  }, [currentUser]);
+
+  // Sync de Status de Fechamento de Meses
+  useEffect(() => {
+    if (!db) return;
+    const q = query(collection(db, 'fechamentos'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = {};
+      snapshot.docs.forEach(doc => {
+        data[doc.id] = doc.data().fechado;
+      });
+      setFechamentos(data);
+    }, (error) => {
+      console.error("Erro ao sincronizar fechamentos: ", error);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    if (name === 'horas') {
+      setFormData(prev => ({ ...prev, [name]: formatHoras(value) }));
+    } else if (name === 'nome') {
+      setFormData(prev => ({ ...prev, [name]: value.toUpperCase() }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const isSelectedMonthClosed = fechamentos[`${formData.mes}-${formData.ano}`] || false;
+
+  const handleSubmit = async (e, customFormData) => {
+    if (e) e.preventDefault();
+    const dataToSubmit = customFormData || formData;
+
+    if (!db) {
+      alert("Erro crítico: Banco de dados inacessível.");
+      return;
+    }
+
+    if (fechamentos[`${dataToSubmit.mes}-${dataToSubmit.ano}`]) {
+      alert("Este mês já está fechado. Não é possível enviar relatórios.");
+      return;
+    }
+
+    const nomeFormatado = formatarNome(dataToSubmit.nome);
+    if (!nomeFormatado) {
+      alert("Por favor, insira um nome válido.");
+      return;
+    }
+
+    try {
+      const q = query(
+        collection(db, 'relatorios'),
+        where('nome', '==', nomeFormatado),
+        where('mes', '==', dataToSubmit.mes),
+        where('ano', '==', dataToSubmit.ano)
+      );
+
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        alert("Você já enviou seu relatório este mês.");
+        return;
+      }
+
+      const newReport = {
+        ...dataToSubmit,
+        nome: nomeFormatado, 
+        dataEnvio: serverTimestamp(),
+        tipo: dataToSubmit.participou === 'NÃO' ? 'Publicador(a)' : dataToSubmit.tipo,
+        estudos: dataToSubmit.participou === 'NÃO' ? '0' : (dataToSubmit.estudos || '0'),
+        horas: (dataToSubmit.participou === 'SIM' && dataToSubmit.tipo?.includes('Pioneiro')) ? (dataToSubmit.horas || '0') : null
+      };
+      
+      await addDoc(collection(db, 'relatorios'), newReport);
+      setIsSubmitted(true);
+      
+      setTimeout(() => {
+        setFormData(prev => ({ 
+          ...prev, 
+          nome: '', 
+          estudos: '0', 
+          horas: '', 
+          participou: 'SIM',
+          tipo: 'Publicador(a)'
+        }));
+        setIsSubmitted(false);
+      }, 1000);
+    } catch (error) {
+      console.error("Falha ao processar relatório: ", error);
+      alert("Erro ao enviar. Por favor, tente novamente.");
+    }
+  };
+
+  const handleAdminLogin = async (e) => {
+    e.preventDefault();
+    setAdminError('');
+    try {
+      await setPersistence(auth, inMemoryPersistence);
+      await signInWithEmailAndPassword(auth, adminEmail, adminPassword);
+    } catch (error) {
+      setAdminError('Acesso não autorizado. Verifique as credenciais.');
+    }
+  };
+
+  const handleLogout = useCallback(async () => {
+    await signOut(auth);
+  }, []);
+
+  const updateReport = useCallback(async (updatedReport) => {
+    try {
+      const reportParaSalvar = {
+        ...updatedReport,
+        nome: formatarNome(updatedReport.nome),
+        tipo: updatedReport.participou === 'NÃO' ? 'Publicador(a)' : updatedReport.tipo,
+        estudos: updatedReport.participou === 'NÃO' ? '0' : (updatedReport.estudos || '0'),
+        horas: (updatedReport.participou === 'SIM' && updatedReport.tipo?.includes('Pioneiro')) ? (updatedReport.horas || '0') : null
+      };
+      const docRef = doc(db, 'relatorios', reportParaSalvar.id);
+      await updateDoc(docRef, reportParaSalvar);
+      return true;
+    } catch (error) {
+      console.error("Erro ao atualizar documento: ", error);
+      return false;
+    }
+  }, []);
+
+  const deleteReport = useCallback(async (id) => {
+    try {
+      await deleteDoc(doc(db, 'relatorios', id));
+    } catch (error) {
+      console.error("Erro ao apagar documento: ", error);
+    }
+  }, []);
+
+  const addReportAdmin = useCallback(async (reportData) => {
+    try {
+      const nomeLimpo = formatarNome(reportData.nome);
+      const q = query(
+        collection(db, 'relatorios'),
+        where('nome', '==', nomeLimpo),
+        where('mes', '==', reportData.mes),
+        where('ano', '==', reportData.ano)
+      );
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        alert("Atenção: Já existe um relatório para este irmão neste período.");
+        return false;
+      }
+
+      const newReport = {
+        ...reportData,
+        nome: nomeLimpo,
+        dataEnvio: serverTimestamp(),
+        enviadoPorAdmin: true,
+        tipo: reportData.participou === 'NÃO' ? 'Publicador(a)' : reportData.tipo,
+        estudos: reportData.participou === 'NÃO' ? '0' : (reportData.estudos || '0'),
+        horas: (reportData.participou === 'SIM' && reportData.tipo?.includes('Pioneiro')) ? (reportData.horas || '0') : null
+      };
+      await addDoc(collection(db, 'relatorios'), newReport);
+      return true;
+    } catch (error) {
+      console.error("Erro ao adicionar registro: ", error);
+      return false;
+    }
+  }, []);
+
+  const saveConfig = useCallback(async (dadosRecebidos) => {
+    try {
+      let urlParaSalvar = typeof dadosRecebidos === 'object' && dadosRecebidos.monthlyImage ? dadosRecebidos.monthlyImage : dadosRecebidos;
+      
+      if (dadosRecebidos instanceof File) {
+        const storage = getStorage();
+        
+        if (monthlyImage && monthlyImage.includes('firebasestorage.googleapis.com')) {
+          try {
+            const oldImageRef = ref(storage, monthlyImage);
+            await deleteObject(oldImageRef);
+          } catch (deleteError) {
+            if (deleteError.code !== 'storage/object-not-found') {
+              console.error("Erro ao deletar imagem antiga do Storage: ", deleteError);
+            }
+          }
+        }
+        
+        const fileRef = ref(storage, `capas/capa_${Date.now()}_${dadosRecebidos.name}`);
+        const snapshot = await uploadBytes(fileRef, dadosRecebidos);
+        urlParaSalvar = await getDownloadURL(snapshot.ref);
+      }
+      
+      await setDoc(doc(db, 'configuracoes', 'gerais'), { imagemCapa: urlParaSalvar }, { merge: true });
+      return true;
+    } catch (error) {
+      console.error("Erro ao gravar configuração: ", error);
+      if (error.code === 'storage/quota-exceeded' || error.message?.includes('402')) {
+        alert("Limite de armazenamento gratuito atingido. Apague arquivos antigos no Firebase ou use link externo.");
+      } else {
+        alert("Ocorreu um erro ao tentar salvar a imagem.");
+      }
+      return false;
+    }
+  }, [monthlyImage]);
+
+  const toggleFechamento = useCallback(async (mes, ano, statusAtual) => {
+    const docId = `${mes}-${ano}`;
+    try {
+      await setDoc(doc(db, 'fechamentos', docId), {
+        fechado: !statusAtual,
+        dataFechamento: !statusAtual ? new Date().toISOString() : null
+      }, { merge: true });
+      return true;
+    } catch (error) {
+      console.error("Erro ao alterar fechamento: ", error);
+      return false;
+    }
+  }, []);
+
+  const anosDisponiveis = useMemo(() => {
+    const yearNow = new Date().getFullYear();
+    const range = [];
+    for (let i = 2026; i <= Math.max(2026, yearNow + 1); i++) {
+      range.push(i.toString());
+    }
+    return range.sort((a, b) => b - a);
+  }, []);
+
+  if (authLoading) {
+    return <div className="flex h-screen items-center justify-center text-gray-500 animate-pulse">Verificando sessão...</div>;
+  }
+
+  return (
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <Suspense fallback={<div className="flex h-screen items-center justify-center animate-pulse">Carregando congregação...</div>}>
+        <Routes>
+          {/* Rota Administrativa protegida */}
+          <Route path="/admin" element={
+            currentUser ? (
+              <AdminDashboard 
+                reports={reports} 
+                fechamentos={fechamentos}
+                onLogout={handleLogout} 
+                monthlyImage={monthlyImage} 
+                setMonthlyImage={setMonthlyImage} 
+                meses={meses} 
+                anosDisponiveis={anosDisponiveis}
+                opcoesEstudos={opcoesEstudos}
+                onUpdateReport={updateReport}
+                onDeleteReport={deleteReport}
+                onAddReport={addReportAdmin}
+                onSaveConfig={saveConfig}
+                onToggleFechamento={toggleFechamento}
+                ImageLoader={ImageLoader}
+              />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          } />
+
+          {/* Rota Formulário (Raiz) protegida */}
+          <Route path="/" element={
+            currentUser ? (
+              <Navigate to="/admin" replace />
+            ) : (
+              <FormularioPublicador 
+                view={view}
+                setView={setView}
+                monthlyImage={monthlyImage}
+                handleAdminLogin={handleAdminLogin}
+                adminEmail={adminEmail}
+                setAdminEmail={setAdminEmail}
+                adminPassword={adminPassword}
+                setAdminPassword={setAdminPassword}
+                adminError={adminError}
+                isSubmitted={isSubmitted}
+                handleSubmit={handleSubmit}
+                isSelectedMonthClosed={isSelectedMonthClosed}
+                formData={formData}
+                setFormData={setFormData}
+                handleInputChange={handleInputChange}
+                meses={meses}
+                anosDisponiveis={anosDisponiveis}
+                opcoesEstudos={opcoesEstudos}
+                ImageLoader={ImageLoader}
+              />
+            )
+          } />
+        </Routes>
+      </Suspense>
+    </BrowserRouter>
+  );
+}

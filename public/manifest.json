@@ -1,0 +1,18 @@
+{
+  "name": "Congregação Norte",
+  "short_name": "Norte",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "description": "Sistema de envio de relatórios de serviço de campo.",
+  "background_color": "#F5F7FA",
+  "theme_color": "#4A90E2",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
