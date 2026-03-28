@@ -22,7 +22,6 @@ import {
   Plus
 } from 'lucide-react';
 
-// Componentes internos para garantir o funcionamento em arquivo único
 const Button = ({ children, variant = 'primary', className = '', ...props }) => {
   const baseStyles = "px-4 py-2 rounded-xl font-bold transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center justify-center gap-2";
   const variants = {
@@ -80,12 +79,7 @@ const ActionCard = ({ title, description, icon: Icon, onClick, color }) => (
   </button>
 );
 
-export default function App(props) {
-  // Renomeado para App para ser o default export padrão do ambiente
-  return <AdminDashboard {...props} />;
-}
-
-function AdminDashboard({ 
+export default function AdminDashboard({ 
   reports,
   fechamentos = {},
   onLogout, 
@@ -113,6 +107,10 @@ function AdminDashboard({
   const [filterType, setFilterType] = useState('Todos');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterMonth, filterYear, filterType]);
 
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
@@ -182,14 +180,14 @@ function AdminDashboard({
   const handleExportData = () => {
     const csvContent = "Nome;Mês;Ano;Participou;Tipo;Estudos;Horas;Data de Envio\n"
       + filteredData.map(r => {
-          const dt = r.dataEnvio?.seconds ? new Date(r.dataEnvio.seconds * 1000).toLocaleString('pt-BR') : '';
+          const dt = r.dataEnvio?.seconds ? new Date(r.dataEnvio.seconds * 1000).toLocaleString('pt-BR') : (typeof r.dataEnvio?.toDate === 'function' ? r.dataEnvio.toDate().toLocaleString('pt-BR') : (r.dataEnvio instanceof Date ? r.dataEnvio.toLocaleString('pt-BR') : ''));
           return `"${r.nome}";"${r.mes}";"${r.ano}";"${r.participou}";"${r.tipo}";"${r.estudos || 0}";"${r.horas || ''}";"${dt}"`;
       }).join("\n");
       
     const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.setAttribute("download", `relatorios_${filterMonth.includes('Todos') ? 'Todos' : filterMonth.join('-')}_${filterYear.includes('Todos') ? 'Todos' : filterYear.join('-')}.csv`);
+    link.setAttribute("download", `relatorios_${filterMonth.includes('Todos') ? 'Todos' : (filterMonth.length > 2 ? filterMonth.length + '_meses' : filterMonth.join('-'))}_${filterYear.includes('Todos') ? 'Todos' : filterYear.join('-')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

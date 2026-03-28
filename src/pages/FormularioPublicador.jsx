@@ -72,7 +72,7 @@ export default function FormularioPublicador(props) {
                 type="password" 
                 autoComplete="current-password"
                 value={adminPassword} 
-                onChange={(e) => setAdminPassword(e.target.value)} 
+                onChange={(e) => setAdminPassword(setAdminPassword)} 
                 placeholder="••••••••" 
                 required 
                 errorMessage={adminError} 
@@ -95,7 +95,7 @@ export default function FormularioPublicador(props) {
                 <p className="text-gray-500 text-[0.95rem] leading-relaxed max-w-[250px]">Seu relatório foi registrado com sucesso. Muito obrigado!</p>
               </div>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-5">
+              <form onSubmit={(e) => { if(isSelectedMonthClosed) { e.preventDefault(); return; } handleSubmit(e); }} className="space-y-5">
                 
                 {isSelectedMonthClosed && (
                   <div className="bg-red-50 text-red-600 p-4 rounded-[12px] font-medium text-[0.85rem] flex items-center justify-center text-center border border-red-100 animate-in fade-in">
