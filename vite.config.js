@@ -6,15 +6,20 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          // Bundle React dependencies together
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          // Bundle Firebase separately
-          'vendor-firebase': ['firebase'],
-          // Bundle icon library separately
-          'vendor-icons': ['lucide-react'],
-        },
-      },
-    },
-  },
+        manualChunks(id) {
+          // Separate vendor chunks for better caching
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('node_modules/react-router-dom')) {
+            return 'vendor-react';
+          }
+          if (id.includes('node_modules/firebase')) {
+            return 'vendor-firebase';
+          }
+          if (id.includes('node_modules/lucide-react')) {
+            return 'vendor-icons';
+          }
+          // Return undefined for all other modules (they will be grouped by default)
+        }
+      }
+    }
+  }
 });
